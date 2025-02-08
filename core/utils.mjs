@@ -1,14 +1,15 @@
 import path from 'path';
 
-export const buildPluginsPaths = (baseDir, pluginName) => ({
-    config: path.join(baseDir, pluginName, 'mod.yml'),
-    code: path.join(baseDir, pluginName, 'index.mjs'),
-});
-
-
-
-export const validatePluginStructure = (plugin) => {
-    if (!plugin.meta || !plugin.start || typeof plugin.start !== 'function') {
-        throw new Error(`⚠️ Structure invalide : le plugin doit exporter 'meta' et une fonction 'start'`);
+export function validatePluginStructure(pluginCode) {
+    // Vérifier la présence de meta et start dans le code source
+    if (!pluginCode.includes('exports.meta') || !pluginCode.includes('exports.start')) {
+        throw new Error('⚠️ Structure invalide : le plugin doit exporter "meta" et une fonction "start"');
     }
-};
+}
+
+export function buildPluginsPaths(baseDir, pluginName) {
+    return {
+        code: `${baseDir}/${pluginName}/index.mjs`,
+        config: `${baseDir}/${pluginName}/mod.yml`
+    };
+}

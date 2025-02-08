@@ -1,4 +1,26 @@
- id: exemple
- version: 0.0.1
- permissions:
-  - log_metric
+# Configuration du plugin exemple
+# Ce fichier montre la structure requise pour un plugin IronMetrics
+
+# Identifiant unique du plugin (requis)
+# Format: lettres minuscules, chiffres, tirets
+id: example
+
+# Nom lisible du plugin
+name: Plugin Exemple
+
+# Version du plugin
+version: 1.0.0
+
+# Description du plugin
+description: Plugin d'exemple pour montrer la structure requise
+
+# Auteur du plugin
+author: IronMetrics
+
+# Permissions requises par le plugin
+# Valeurs possibles:
+# - metrics:write  : Permet d'envoyer des métriques
+# - metrics:read   : Permet de lire les métriques
+# - system:info    : Permet d'accéder aux informations système
+permissions:
+  - metrics:write 

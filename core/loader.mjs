@@ -3,11 +3,13 @@ import path from 'path';
 import * as url from 'url';
 import { buildPluginsPaths, validatePluginStructure } from './utils.mjs';
 import { PluginValidator } from './security.mjs';
+import { MetricsPipeline } from './metrics.mjs';
 
 export class PluginLoader {
-    constructor(fsModule = fs, importFn = (path) => import(url.pathToFileURL(path).href + '?t=' + Date.now())) {
+    constructor(fsModule = fs, importFn = (path) => import(url.pathToFileURL(path).href)) {
         this.fs = fsModule;
         this.importFn = importFn;
+        this.metricsPipeline = new MetricsPipeline();
     }
 
     async scanDirectories(baseDir) {
@@ -27,9 +29,18 @@ export class PluginLoader {
         try {
             const modConfigRaw = await this.fs.readFile(paths.config, 'utf-8');
             const config = await PluginValidator.validate(paths.config, modConfigRaw);
-            const pluginCode = await this.importFn(paths.code);
+            
+            // Lire le contenu du fichier au lieu de l'importer
+            const pluginPath = path.resolve(process.cwd(), paths.code);
+            const pluginCode = await this.fs.readFile(pluginPath, 'utf-8');
 
-            validatePluginStructure(pluginCode);
+            // Valider la structure du plugin
+            try {
+                validatePluginStructure(pluginCode);
+            } catch (error) {
+                console.error(`⚠️ Plugin ${dir.name} invalide :`, error.message);
+                return null;
+            }
 
             return {
                 config,

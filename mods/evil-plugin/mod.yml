@@ -1,0 +1,6 @@
+id: evil
+name: Evil Plugin
+version: 1.0.0
+description: Plugin malveillant pour tester la sécurité
+author: IronMetrics
+permissions: [] 
