@@ -1,13 +1,12 @@
 import { MetricsPipeline } from '../core/metrics.mjs';
 import { jest } from '@jest/globals';
 
-describe('MetricsPipeline', () => {
+describe('MetricsPipeline - Validation', () => {
     let pipeline;
-    
+
     beforeEach(() => {
         jest.useFakeTimers();
         pipeline = new MetricsPipeline();
-        // Mock console.table pour les tests
         console.table = jest.fn();
     });
 
@@ -17,64 +16,93 @@ describe('MetricsPipeline', () => {
         jest.clearAllTimers();
     });
 
-    test('validateFormat valide correctement les métriques', () => {
+    test('accepte une métrique valide', () => {
         const validMetric = {
             timestamp: Date.now(),
-            value: "123.45",
-            unit: "MB"
+            value: 42,
+            source: 'test-plugin',
+            unit: '%',
+            name: 'cpu-usage'
         };
-        
-        const processed = pipeline.validateFormat(validMetric);
-        expect(processed.value).toBe(123.45);
-        expect(processed.unit).toBe("MB");
-        expect(processed.timestamp).toBe(validMetric.timestamp);
-    });
 
-    test('validateFormat rejette les métriques invalides', () => {
-        const invalidMetrics = [
-            { value: "123.45" },
-            { timestamp: Date.now() },
-            null,
-            undefined,
-            "not an object",
-            {}
-        ];
-        
-        invalidMetrics.forEach(metric => {
-            expect(() => pipeline.validateFormat(metric)).toThrow('invalid metric format');
-        });
-    });
-
-    test('addMetric ajoute à la queue', () => {
-        const metric = {
-            timestamp: Date.now(),
-            value: 100,
-            unit: "MB"
-        };
-        
-        pipeline.addMetric(metric);
+        expect(() => pipeline.addMetric(validMetric)).not.toThrow();
         expect(pipeline.queue.length).toBe(1);
-        expect(pipeline.queue[0].value).toBe(100);
+        expect(pipeline.queue[0]).toEqual(validMetric);
+    });
+
+    test('rejette une métrique sans timestamp', () => {
+        const invalidMetric = {
+            value: 42,
+            source: 'test-plugin',
+            unit: '%'
+        };
+
+        expect(() => pipeline.addMetric(invalidMetric))
+            .toThrow(/must have required property 'timestamp'/);
+    });
+
+    test('rejette une valeur non numérique', () => {
+        const invalidMetric = {
+            timestamp: Date.now(),
+            value: "42",
+            source: 'test-plugin',
+            unit: '%'
+        };
+
+        expect(() => pipeline.addMetric(invalidMetric))
+            .toThrow(/value must be number/);
+    });
+
+    test('rejette une unité non supportée', () => {
+        const invalidMetric = {
+            timestamp: Date.now(),
+            value: 42,
+            source: 'test-plugin',
+            unit: 'invalid'
+        };
+
+        expect(() => pipeline.addMetric(invalidMetric))
+            .toThrow(/unit must be equal to one of the allowed values/);
+    });
+
+    test('rejette un ID de plugin invalide', () => {
+        const invalidMetric = {
+            timestamp: Date.now(),
+            value: 42,
+            source: 'TEST@invalid',
+            unit: '%'
+        };
+
+        expect(() => pipeline.addMetric(invalidMetric))
+            .toThrow(/source must match format "plugin-id"/);
+    });
+
+    test('rejette les propriétés additionnelles', () => {
+        const invalidMetric = {
+            timestamp: Date.now(),
+            value: 42,
+            source: 'test-plugin',
+            unit: '%',
+            extraField: 'should not be here'
+        };
+
+        expect(() => pipeline.addMetric(invalidMetric))
+            .toThrow(/must NOT have additional properties/);
     });
 
     test('processQueue traite les métriques par batch', () => {
-        const timestamp = Date.now();
+        const validMetric = {
+            timestamp: Date.now(),
+            value: 42,
+            source: 'test-plugin',
+            unit: '%'
+        };
+
+        pipeline.addMetric(validMetric);
+        pipeline.addMetric({...validMetric, value: 43});
         
-        // Ajoute 3 métriques valides
-        for(let i = 0; i < 3; i++) {
-            pipeline.addMetric({
-                timestamp: timestamp + i,
-                value: i,
-                unit: "MB"
-            });
-        }
-        
-        expect(pipeline.queue.length).toBe(3);
-        
-        // Avance le temps de 1 seconde pour déclencher l'intervalle
+        expect(pipeline.queue.length).toBe(2);
         jest.advanceTimersByTime(1000);
-        
-        // Vérifie que la queue est vide après traitement
         expect(pipeline.queue.length).toBe(0);
         expect(console.table).toHaveBeenCalledTimes(1);
     });

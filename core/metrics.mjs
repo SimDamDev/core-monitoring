@@ -1,25 +1,26 @@
+import Ajv from 'ajv';
+import { MetricSchema, addCustomFormats } from './schema.mjs';
+
 export class MetricsPipeline {
     constructor() {
         this.queue = [];
         this.interval = setInterval(() => this.processQueue(), 1000); //Batch processing
+        
+        // Initialisation du validateur
+        this.ajv = new Ajv({ allErrors: true });
+        addCustomFormats(this.ajv);
+        this.validateMetric = this.ajv.compile(MetricSchema);
     }
 
     addMetric(rawData) {
-        const validMetric = this.validateFormat(rawData);
-        this.queue.push(validMetric);
-    }
-
-    validateFormat(data) {
-        if (!data || typeof data !== 'object') throw 'invalid metric format';
-        if (typeof data.timestamp === 'undefined' || typeof data.value === 'undefined') {
-            throw 'invalid metric format';
+        const isValid = this.validateMetric(rawData);
+        if (!isValid) {
+            const errors = this.validateMetric.errors.map(err => 
+                `${err.instancePath} ${err.message}`
+            ).join(', ');
+            throw new Error(`Invalid metric format: ${errors}`);
         }
-
-        return {
-            timestamp: data.timestamp,
-            value: Number(data.value),
-            unit: data.unit || 'unknown'
-        };
+        this.queue.push(rawData);
     }
 
     processQueue() {

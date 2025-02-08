@@ -1,4 +1,6 @@
 {
+  "name": "core-monitoring",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --no-cache",
@@ -6,7 +8,9 @@
     "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage --no-cache"
   },
   "dependencies": {
-    "yaml": "^2.3.4"
+    "ajv": "^8.12.0",
+    "yaml": "^2.3.4",
+    "isolated-vm": "^4.7.2"
   },
   "devDependencies": {
     "@types/jest": "^29.5.12",

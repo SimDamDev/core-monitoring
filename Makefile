@@ -17,14 +17,14 @@ export BROWSER
 # Liste des commandes
 .PHONY: help test test-watch install clean start audit test-coverage docker-build docker-run docker-stop docker-compose-up docker-compose-down
 
-# Commande par défaut
+# Commande par defaut
 .DEFAULT_GOAL := help
 
 # Commandes principales
 start:
 	node $(NODE_OPTS) index.mjs
 
-# Ajout de la commande dev pour le développement
+# Ajout de la commande dev pour le developpement
 dev:
 	nodemon $(NODE_OPTS) index.mjs
 
@@ -52,11 +52,11 @@ docker-build:
 docker-run:
 	docker run -p $(DOCKER_PORT):$(DOCKER_PORT) $(DOCKER_IMAGE)
 
-# Nouvelle commande pour arrêter le conteneur Docker
+# Nouvelle commande pour arreter le conteneur Docker
 docker-stop:
 	docker stop $$(docker ps -q --filter ancestor=$(DOCKER_IMAGE))
 
-# Nouvelle commande pour le développement avec Docker Compose
+# Nouvelle commande pour le developpement avec Docker Compose
 docker-compose-up:
 	docker-compose up -d
 
@@ -119,15 +119,15 @@ else
 	@echo   make help config   - Affiche la configuration des raccourcis
 	@echo   make test         - Lance les tests une fois (Ctrl+Shift+T)
 	@echo   make test-watch   - Lance les tests en mode watch (Ctrl+Alt+T)
-	@echo   make test-coverage - Génère le rapport de couverture (Ctrl+Shift+C)
-	@echo   make install      - Installe les dépendances
+	@echo   make test-coverage - Genere le rapport de couverture (Ctrl+Shift+C)
+	@echo   make install      - Installe les dependances
 	@echo   make clean        - Nettoie le projet (Ctrl+Shift+X)
 	@echo   make start        - Lance l'application (Ctrl+Shift+R)
-	@echo   make dev          - Lance l'application en mode développement
-	@echo   make audit        - Vérifie les vulnérabilités (Ctrl+Shift+A)
+	@echo   make dev          - Lance l'application en mode developpement
+	@echo   make audit        - Verifie les vulnerabilites (Ctrl+Shift+A)
 	@echo   make docker-build - Construit l'image Docker
 	@echo   make docker-run   - Lance le conteneur Docker
-	@echo   make docker-stop  - Arrête le conteneur Docker
+	@echo   make docker-stop  - Arrete le conteneur Docker
 	@echo   make docker-compose-up   - Lance les services avec Docker Compose
-	@echo   make docker-compose-down - Arrête les services Docker Compose
+	@echo   make docker-compose-down - Arrete les services Docker Compose
 endif

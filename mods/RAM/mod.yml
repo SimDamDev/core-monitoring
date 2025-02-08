@@ -1,4 +1,0 @@
- id: RAM_exercice
- version: 0.0.1
- permissions:
-  - log_metric
