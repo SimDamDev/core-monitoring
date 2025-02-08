@@ -30,11 +30,17 @@ export class PluginLoader {
             const modConfigRaw = await this.fs.readFile(paths.config, 'utf-8');
             const config = await PluginValidator.validate(paths.config, modConfigRaw);
             
-            // Charger le module
+            // Lire le contenu du fichier au lieu de l'importer
             const pluginPath = path.resolve(process.cwd(), paths.code);
-            const pluginCode = await this.importFn(pluginPath);
+            const pluginCode = await this.fs.readFile(pluginPath, 'utf-8');
 
-            validatePluginStructure(pluginCode);
+            // Valider la structure du plugin
+            try {
+                validatePluginStructure(pluginCode);
+            } catch (error) {
+                console.error(`⚠️ Plugin ${dir.name} invalide :`, error.message);
+                return null;
+            }
 
             return {
                 config,

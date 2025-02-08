@@ -39,25 +39,26 @@ describe('Loader de plugins', () => {
 
     it('devrait charger les plugins correctement', async () => {
         // Arrange
-        const mockPlugin = {
-            meta: { id: 'valid-plugin' },
-            start: jest.fn()
-        };
+        const mockPluginCode = `
+            exports.meta = { id: 'valid-plugin' };
+            exports.start = jest.fn();
+        `;
 
         mockFs.readdir.mockResolvedValue([{
             name: 'valid-plugin',
             isDirectory: () => true
         }]);
 
-        mockFs.readFile.mockResolvedValue(`
+        mockFs.readFile.mockImplementation((path) => {
+            if (path.endsWith('mod.yml')) {
+                return `
 id: valid-plugin
 version: 1.0.0
 permissions: 
-  - metrics:write`);
-
-        // Mock de import() dynamique
-        const mockImport = jest.fn().mockResolvedValue(mockPlugin);
-        loader.importFn = mockImport;
+  - metrics:write`;
+            }
+            return mockPluginCode;
+        });
 
         // Act
         const plugins = await loader.loadPlugins('./mods');
@@ -66,7 +67,7 @@ permissions:
         expect(plugins.length).toBe(1);
         expect(plugins[0].config.id).toBe('valid-plugin');
         expect(plugins[0].config.version).toBe('1.0.0');
-        expect(plugins[0].code).toBe(mockPlugin);
+        expect(plugins[0].code).toBe(mockPluginCode);
     });
 
     it('devrait gérer les erreurs de lecture du dossier', async () => {
@@ -98,25 +99,26 @@ permissions:
 
     it('devrait valider la structure du plugin', async () => {
         // Arrange
-        const invalidPlugin = {
+        const invalidPluginCode = `
             // Pas de meta ni de start
             someOtherFunction: () => {}
-        };
+        `;
 
         mockFs.readdir.mockResolvedValue([{
             name: 'invalid-structure',
             isDirectory: () => true
         }]);
 
-        mockFs.readFile.mockResolvedValue(`
+        mockFs.readFile.mockImplementation((path) => {
+            if (path.endsWith('mod.yml')) {
+                return `
 id: invalid-structure
 version: 1.0.0
 permissions: 
-  - metrics:write`);
-
-        // Mock de import() dynamique
-        const mockImport = jest.fn().mockResolvedValue(invalidPlugin);
-        loader.importFn = mockImport;
+  - metrics:write`;
+            }
+            return invalidPluginCode;
+        });
 
         // Act
         const plugins = await loader.loadPlugins('./mods');
