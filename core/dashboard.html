@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>IronMetrics - Dashboard</title>
+    <style>
+        body { 
+            font-family: Arial; 
+            padding: 20px;
+            margin: 0;
+            background: #f3f4f6;
+        }
+        h1 {
+            color: #1f2937;
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+        #metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .metric {
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            height: 80px;
+        }
+        .metric-header {
+            color: #4b5563;
+            font-size: 12px;
+            margin-bottom: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .metric-name {
+            font-weight: bold;
+        }
+        .metric-source {
+            color: #9ca3af;
+            font-size: 11px;
+        }
+        .value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2563eb;
+            margin-top: auto;
+        }
+        #logs {
+            margin-top: 20px;
+            padding: 10px;
+            background: #1f2937;
+            color: #e5e7eb;
+            font-family: monospace;
+            border-radius: 8px;
+            max-height: 150px;
+            overflow-y: auto;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Tableau de bord IronMetrics</h1>
+    <div id="metrics"></div>
+    <div id="logs"></div>
+
+    <script>
+        const logs = document.getElementById('logs');
+        const metrics = document.getElementById('metrics');
+        let ws;
+
+        function log(message, isError = false) {
+            const line = document.createElement('div');
+            line.style.color = isError ? '#ef4444' : '#10b981';
+            line.textContent = `${new Date().toLocaleTimeString()} | ${message}`;
+            logs.appendChild(line);
+            logs.scrollTop = logs.scrollHeight;
+            
+            // Garder seulement les 50 derniers logs
+            while (logs.children.length > 50) {
+                logs.removeChild(logs.firstChild);
+            }
+        }
+
+        function updateMetrics() {
+            fetch('/metrics')
+                .then(response => response.json())
+                .then(data => {
+                    metrics.innerHTML = '';
+                    
+                    // Regrouper les métriques par source et nom
+                    const latestMetrics = new Map();
+                    data.forEach(metric => {
+                        const key = `${metric.source}_${metric.name}`;
+                        // On garde seulement la dernière métrique (les données sont déjà triées par timestamp)
+                        if (!latestMetrics.has(key)) {
+                            latestMetrics.set(key, metric);
+                        }
+                    });
+                    
+                    // Afficher uniquement les dernières métriques
+                    latestMetrics.forEach(metric => {
+                        const div = document.createElement('div');
+                        div.className = 'metric';
+                        div.innerHTML = `
+                            <div class="metric-header">
+                                <span class="metric-name">${metric.name || 'Sans nom'}</span>
+                                <span class="metric-source">${metric.source}</span>
+                            </div>
+                            <div class="value">
+                                ${typeof metric.value === 'number' ? metric.value.toFixed(1) : metric.value}${metric.unit}
+                            </div>
+                        `;
+                        metrics.appendChild(div);
+                    });
+                })
+                .catch(error => {
+                    log(`❌ Erreur: ${error.message}`, true);
+                });
+        }
+
+        function connectWebSocket() {
+            ws = new WebSocket(`ws://${window.location.host}`);
+            
+            ws.onopen = () => {
+                log('🔌 Connecté au serveur');
+            };
+            
+            ws.onclose = () => {
+                log('🔌 Déconnecté du serveur', true);
+                // Reconnexion après 5 secondes
+                setTimeout(connectWebSocket, 5000);
+            };
+            
+            ws.onmessage = (event) => {
+                const metric = JSON.parse(event.data);
+                log(`📊 Nouvelle métrique: ${metric.name} = ${metric.value}${metric.unit}`);
+                updateMetrics();
+            };
+            
+            ws.onerror = (error) => {
+                log(`❌ Erreur WebSocket: ${error.message}`, true);
+            };
+        }
+
+        // Mise à jour initiale
+        updateMetrics();
+        
+        // Connexion WebSocket
+        connectWebSocket();
+
+        // Mise à jour toutes les secondes
+        setInterval(updateMetrics, 1000);
+
+        // Logs de démarrage
+        log('🚀 Dashboard démarré');
+        log('⏱️ Actualisation toutes les secondes');
+    </script>
+</body>
+</html> 

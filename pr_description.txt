@@ -1,0 +1,1 @@
+Cette PR implémente la phase J2 du projet, focalisée sur la sécurité et la stabilité.

@@ -63,6 +63,11 @@ docker-compose-up:
 docker-compose-down:
 	docker-compose down
 
+# Nouvelle commande pour créer un plugin
+new-plugin:
+	@echo "Création d'un nouveau plugin..."
+	@powershell -Command "$$name = Read-Host 'Nom du plugin'; New-Item -ItemType Directory -Path mods/$$name -Force | Out-Null; Copy-Item mods/example/* mods/$$name/ -Force; (Get-Content mods/$$name/mod.yml) -replace 'example', $$name | Set-Content mods/$$name/mod.yml; echo '✅ Plugin créé dans mods/'$$name"
+
 # Aide et documentation
 help:
 ifeq ($(filter config,$(MAKECMDGOALS)),config)
@@ -130,4 +135,5 @@ else
 	@echo   make docker-stop  - Arrete le conteneur Docker
 	@echo   make docker-compose-up   - Lance les services avec Docker Compose
 	@echo   make docker-compose-down - Arrete les services Docker Compose
+	@echo   make new-plugin   - Cree un nouveau plugin
 endif
