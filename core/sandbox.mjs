@@ -3,14 +3,19 @@ import EventEmitter from 'events';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import { WORKER_RESOURCE_LIMITS } from './bootstrap.mjs';
+import { REFRESH_PROFILES, DEFAULT_CONFIG } from './config.mjs';
 
 export class PluginSandbox extends EventEmitter {
     constructor(pluginCode, config = {}) {
         super();
         this.pluginCode = pluginCode;
-        this.config = config;
+        this.config = {
+            ...DEFAULT_CONFIG,
+            ...config
+        };
         this.worker = null;
         this.timeoutId = null;
+        this.refreshInterval = null;
     }
 
     async start() {
@@ -49,6 +54,7 @@ export class PluginSandbox extends EventEmitter {
                                 clearTimeout(this.timeoutId);
                                 this.timeoutId = null;
                             }
+                            this.setupRefreshInterval();
                             resolve(true);
                             break;
                     }
@@ -93,10 +99,27 @@ export class PluginSandbox extends EventEmitter {
         });
     }
 
+    setupRefreshInterval() {
+        const interval = REFRESH_PROFILES[this.config.refresh_profile];
+        if (interval > 0) {
+            this.refreshInterval = setInterval(() => {
+                if (this.worker) {
+                    this.worker.postMessage({ type: 'collect' });
+                }
+            }, interval);
+            // Pour éviter de bloquer le processus
+            this.refreshInterval.unref();
+        }
+    }
+
     cleanup() {
         if (this.timeoutId) {
             clearTimeout(this.timeoutId);
             this.timeoutId = null;
+        }
+        if (this.refreshInterval) {
+            clearInterval(this.refreshInterval);
+            this.refreshInterval = null;
         }
         if (this.worker) {
             this.worker.terminate();
@@ -115,6 +138,10 @@ export class PluginSandbox extends EventEmitter {
                 if (this.timeoutId) {
                     clearTimeout(this.timeoutId);
                     this.timeoutId = null;
+                }
+                if (this.refreshInterval) {
+                    clearInterval(this.refreshInterval);
+                    this.refreshInterval = null;
                 }
                 if (this.worker) {
                     this.worker.terminate();

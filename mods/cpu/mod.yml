@@ -4,5 +4,6 @@ version: 1.0.0
 description: Moniteur de l'utilisation CPU
 author: IronMetrics
 permissions:
+  - system:info
   - metrics:write
-  - system:info 
+refresh_profile: rapid  # Collecte toutes les 5 secondes 

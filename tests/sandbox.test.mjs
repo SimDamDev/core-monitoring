@@ -145,4 +145,49 @@ describe('PluginSandbox', () => {
         await sandbox.start();
         await expect(sandbox.stop()).resolves.toBe(true);
     }, 30000);
+
+    it('respecte le profil de rafraîchissement', async () => {
+        const mockPlugin = `
+            exports.meta = {
+                name: 'test-refresh',
+                version: '1.0.0'
+            };
+            
+            exports.start = function(api) {
+                this.api = api;
+                return true;
+            };
+            
+            exports.collect = function() {
+                this.api.sendMetric({
+                    name: 'test.metric',
+                    value: Math.random() * 100,
+                    unit: 'count',
+                    timestamp: Date.now()
+                });
+            };
+        `;
+
+        const config = {
+            id: 'test-refresh',
+            permissions: ['metrics:write'],
+            refresh_profile: 'rapid'
+        };
+
+        const sandbox = new PluginSandbox(mockPlugin, config);
+        const metrics = [];
+
+        sandbox.on('metric', (metric) => {
+            metrics.push(metric);
+        });
+
+        await sandbox.start();
+        
+        // Attendre 3 collectes (15 secondes avec le profil rapid)
+        await new Promise(resolve => setTimeout(resolve, 15_000));
+        
+        expect(metrics.length).toBeGreaterThanOrEqual(2);
+        
+        await sandbox.stop();
+    }, 20_000);
 }); 
