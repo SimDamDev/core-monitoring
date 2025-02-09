@@ -4,4 +4,5 @@ version: 1.0.0
 description: Moniteur de l'utilisation CPU
 author: IronMetrics
 permissions:
-  - metrics:write 
+  - metrics:write
+  - system:info 

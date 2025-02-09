@@ -40,8 +40,8 @@ describe('Loader de plugins', () => {
     it('devrait charger les plugins correctement', async () => {
         // Arrange
         const mockPluginCode = `
-            exports.meta = { id: 'valid-plugin' };
-            exports.start = jest.fn();
+            export const meta = { id: 'valid-plugin' };
+            export function start() {};
         `;
 
         mockFs.readdir.mockResolvedValue([{
@@ -100,8 +100,8 @@ permissions:
     it('devrait valider la structure du plugin', async () => {
         // Arrange
         const invalidPluginCode = `
-            // Pas de meta ni de start
-            someOtherFunction: () => {}
+            // Code invalide sans exports
+            function someOtherFunction() {}
         `;
 
         mockFs.readdir.mockResolvedValue([{
