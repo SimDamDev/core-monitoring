@@ -7,12 +7,17 @@ import path from 'path';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export class Dashboard {
-    constructor(port, storage) {
+    constructor(port, storage, scheduler) {
         if (!storage) throw new Error('Storage est requis');
+        if (!scheduler) throw new Error('Scheduler est requis');
+        
         this.storage = storage;
+        this.scheduler = scheduler;
         this.metrics = [];
         this.clients = new Set();
-        this.ready = this.init(port);
+        this.ready = new Promise((resolve, reject) => {
+            this.init(port).then(resolve).catch(reject);
+        });
     }
 
     async init(port) {
@@ -50,25 +55,30 @@ export class Dashboard {
             this.wss.on('connection', (ws) => {
                 console.log('📱 Nouvelle connexion WebSocket');
                 this.clients.add(ws);
+                this.scheduler.incrementConnections();
+
                 ws.on('close', () => {
                     console.log('📴 Déconnexion WebSocket');
                     this.clients.delete(ws);
+                    this.scheduler.decrementConnections();
                 });
             });
 
             // Démarrage du serveur
-            await new Promise((resolve, reject) => {
-                this.server.on('error', (error) => {
-                    console.error('❌ Erreur serveur HTTP:', error);
-                    reject(error);
-                });
-
+            await new Promise((resolve) => {
                 this.server.listen(port, () => {
                     console.log(`📊 Dashboard prêt sur http://localhost:${port}`);
                     resolve();
                 });
             });
 
+            // Écoute des événements du scheduler
+            this.scheduler.on('collection:stop', async () => {
+                // Nettoyage des anciennes métriques quand la collecte s'arrête
+                await this.storage.cleanOldMetrics();
+            });
+
+            return true;
         } catch (error) {
             console.error('❌ Erreur initialisation dashboard:', error);
             throw error;
@@ -129,12 +139,22 @@ export class Dashboard {
     }
 
     async cleanup() {
-        for (const client of this.clients) {
-            client.close();
+        console.log('🧹 Nettoyage du dashboard');
+        if (this.wss) {
+            for (const client of this.clients) {
+                client.close();
+            }
+            this.wss.close();
+        }
+        if (this.server) {
+            await new Promise((resolve) => {
+                this.server.close(() => {
+                    console.log('📊 Serveur dashboard arrêté');
+                    resolve();
+                });
+            });
         }
         this.clients.clear();
-        if (this.server) {
-            this.server.close();
-        }
+        this.metrics = [];
     }
 } 

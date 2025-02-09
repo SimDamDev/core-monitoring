@@ -1,70 +1,69 @@
 import sqlite3 from 'sqlite3';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { promisify } from 'util';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export class Storage {
-    constructor(dbPath = 'metrics.db') {
-        this.dbPath = path.join(__dirname, '..', dbPath);
-        this.db = new sqlite3.Database(this.dbPath);
-        this.ready = this.initDatabase();
+    constructor() {
+        const dbPath = path.join(__dirname, '..', 'metrics.db');
+        this.db = new sqlite3.Database(dbPath);
+        this.ready = new Promise((resolve, reject) => {
+            this.initDatabase().then(resolve).catch(reject);
+        });
     }
 
     async initDatabase() {
-        const run = promisify(this.db.run.bind(this.db));
-        
-        try {
-            // Active le mode WAL pour de meilleures performances
-            await run('PRAGMA journal_mode = WAL');
-            
-            // Création de la table metrics
-            await run(`
-                CREATE TABLE IF NOT EXISTS metrics (
-                    timestamp INTEGER NOT NULL,
-                    source TEXT CHECK(length(source) <= 32),
-                    name TEXT,
-                    value REAL NOT NULL,
-                    unit TEXT CHECK(unit IN ('%', 'ms', 'MB')),
-                    PRIMARY KEY (timestamp, source)
-                )
-            `);
+        return new Promise((resolve, reject) => {
+            try {
+                // Active le mode WAL pour de meilleures performances
+                this.db.run('PRAGMA journal_mode = WAL');
+                
+                // Création de la table metrics
+                this.db.run(`
+                    CREATE TABLE IF NOT EXISTS metrics (
+                        timestamp INTEGER NOT NULL,
+                        source TEXT CHECK(length(source) <= 32),
+                        name TEXT,
+                        value REAL NOT NULL,
+                        unit TEXT CHECK(unit IN ('%', 'ms', 'MB')),
+                        PRIMARY KEY (timestamp, source)
+                    )
+                `);
 
-            await run(`
-                CREATE INDEX IF NOT EXISTS idx_metrics_source 
-                ON metrics(source)
-            `);
+                this.db.run(`
+                    CREATE INDEX IF NOT EXISTS idx_metrics_source 
+                    ON metrics(source)
+                `);
 
-            await run(`
-                CREATE INDEX IF NOT EXISTS idx_metrics_timestamp 
-                ON metrics(timestamp DESC)
-            `);
-        } catch (error) {
-            console.error('Erreur initialisation base de données:', error);
-            throw error;
-        }
+                this.db.run(`
+                    CREATE INDEX IF NOT EXISTS idx_metrics_timestamp 
+                    ON metrics(timestamp DESC)
+                `, (err) => {
+                    if (err) reject(err);
+                    else resolve(true);
+                });
+
+            } catch (error) {
+                console.error('Erreur initialisation base de données:', error);
+                reject(error);
+            }
+        });
     }
 
-    async insertMetric(metric) {
+    async insertMetric(data) {
         await this.ready;
         return new Promise((resolve, reject) => {
             this.db.run(
                 `INSERT INTO metrics (timestamp, source, name, value, unit)
                 VALUES (?, ?, ?, ?, ?)`,
-                [
-                    metric.timestamp,
-                    metric.source,
-                    metric.name,
-                    metric.value,
-                    metric.unit
-                ],
+                [data.timestamp, data.source, data.name, data.value, data.unit],
                 (err) => {
                     if (err) {
                         console.error('Erreur insertion métrique:', err);
                         reject(err);
                     } else {
-                        resolve(true);
+                        resolve();
                     }
                 }
             );
@@ -83,6 +82,7 @@ export class Storage {
                 [oneDayAgo],
                 (err, rows) => {
                     if (err) {
+                        console.error('Erreur récupération métriques:', err);
                         reject(err);
                     } else {
                         resolve(rows);
@@ -92,31 +92,47 @@ export class Storage {
         });
     }
 
-    async cleanup() {
+    async cleanOldMetrics() {
         await this.ready;
-        return new Promise((resolve) => {
-            if (this.db) {
-                this.db.close(() => resolve());
-            } else {
-                resolve();
-            }
+        return new Promise((resolve, reject) => {
+            const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+            this.db.run(
+                `DELETE FROM metrics 
+                WHERE timestamp < ?`,
+                [oneDayAgo],
+                function(err) {
+                    if (err) {
+                        console.error('Erreur nettoyage métriques:', err);
+                        reject(err);
+                    } else {
+                        console.log(`🧹 Nettoyage de ${this.changes} anciennes métriques`);
+                        resolve(this.changes);
+                    }
+                }
+            );
         });
+    }
+
+    async cleanup() {
+        if (this.db) {
+            return new Promise((resolve) => {
+                this.db.close(() => {
+                    resolve();
+                });
+            });
+        }
     }
 
     async backup() {
         await this.ready;
-        return new Promise((resolve, reject) => {
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-            const backupPath = this.dbPath.replace('.db', `_backup_${timestamp}.db`);
-            this.db.exec(`VACUUM INTO '${backupPath}'`, (err) => {
-                if (err) {
-                    console.error('Erreur backup:', err);
-                    reject(err);
-                } else {
-                    console.log(`✅ Backup créé: ${backupPath}`);
-                    resolve();
-                }
-            });
-        });
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const backupPath = this.dbPath.replace('.db', `_backup_${timestamp}.db`);
+        try {
+            this.db.backup(backupPath);
+            console.log(`✅ Backup créé: ${backupPath}`);
+        } catch (error) {
+            console.error('Erreur backup:', error);
+            throw error;
+        }
     }
 } 

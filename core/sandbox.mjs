@@ -3,12 +3,16 @@ import EventEmitter from 'events';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import { WORKER_RESOURCE_LIMITS } from './bootstrap.mjs';
+import { DEFAULT_CONFIG } from './config.mjs';
 
 export class PluginSandbox extends EventEmitter {
     constructor(pluginCode, config = {}) {
         super();
         this.pluginCode = pluginCode;
-        this.config = config;
+        this.config = {
+            ...DEFAULT_CONFIG,
+            ...config
+        };
         this.worker = null;
         this.timeoutId = null;
     }
@@ -91,6 +95,15 @@ export class PluginSandbox extends EventEmitter {
                 reject(error);
             }
         });
+    }
+
+    collect() {
+        if (this.worker) {
+            console.log(`[Plugin ${this.config.id}] 📊 Collecte demandée`);
+            this.worker.postMessage({ type: 'collect' });
+        } else {
+            console.log(`[Plugin ${this.config.id}] ⚠️ Collecte impossible: worker non démarré`);
+        }
     }
 
     cleanup() {

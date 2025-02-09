@@ -16,15 +16,28 @@ const console = {
 };
 
 // Contexte global sécurisé
+const exports = {};
+const module = { exports };
 const secureGlobal = {
     console,
     setTimeout,
     clearTimeout,
+    exports,
+    module,
     process: {
         uptime: process.uptime.bind(process),
         memoryUsage: process.memoryUsage.bind(process),
         cpuUsage: process.cpuUsage.bind(process)
     }
+};
+
+// Bloquer setInterval et clearInterval
+global.setInterval = function() {
+    throw new Error('setInterval est bloqué - utilisez le profil de refresh dans mod.yml');
+};
+
+global.clearInterval = function() {
+    throw new Error('clearInterval est bloqué - utilisez le profil de refresh dans mod.yml');
 };
 
 // Remplacer le contexte global
@@ -46,8 +59,22 @@ global.import = function(moduleName) {
 
 // Recevoir le code du plugin et les permissions
 parentPort.on("message", async ({ code, permissions = [], type }) => {
-    // Si c'est un message d'arrêt, on ne fait rien
+    // Si c'est un message d'arrêt, on termine le worker
     if (type === 'stop') {
+        parentPort.close();
+        return;
+    }
+
+    // Si c'est un message de collecte, on appelle la fonction collect
+    if (type === 'collect' && exports && typeof exports.collect === 'function') {
+        try {
+            await exports.collect();
+        } catch (error) {
+            parentPort.postMessage({ 
+                type: "error", 
+                data: ["Erreur collecte", error.message] 
+            });
+        }
         return;
     }
 
@@ -98,41 +125,38 @@ parentPort.on("message", async ({ code, permissions = [], type }) => {
             .replace(/import\s+.*?from\s+['"].*?['"]\s*;?\n?/g, '') // Supprime les imports
             .replace(/export\s+const\s+(\w+)\s*=\s*/g, 'exports.$1 = ') // Convertit export const en exports.
             .replace(/export\s+function\s+(\w+)\s*\(/g, 'exports.$1 = function('); // Convertit export function en exports.
-            
-        const exports = {};
-        const pluginFunction = new Function('global', 'console', 'api', 'exports', `
-            try {
-                ${commonJSCode}
-                
-                // Validation de la structure du plugin
-                if (typeof exports.meta === "undefined" || typeof exports.start !== "function") {
-                    throw new Error("⚠️ Structure invalide : le plugin doit exporter 'meta' et une fonction 'start'");
-                }
-                
-                const result = exports.start(api);
-                if (result && typeof result.then === "function") {
-                    return result;
-                }
-                return Promise.resolve(result);
-            } catch (error) {
-                if (error.message.includes("require is not defined") || error.message.includes("is not defined")) {
-                    throw new Error("Tentative d'accès aux modules système bloquée");
-                }
-                throw error;
-            }
-        `);
 
-        // Exécuter la fonction du plugin
-        try {
-            const result = await pluginFunction(global, console, api, exports);
-            parentPort.postMessage({ type: "started" });
-        } catch (error) {
-            parentPort.postMessage({ 
-                type: "error", 
-                data: ["Erreur initialisation", error.message] 
-            });
-            throw error;
+        // Exécution du code dans un contexte isolé
+        const context = {
+            exports,
+            module,
+            api,
+            console: {
+                log: (...args) => parentPort.postMessage({ type: "log", data: args }),
+                error: (...args) => parentPort.postMessage({ type: "error", data: args }),
+                warn: (...args) => parentPort.postMessage({ type: "warn", data: args })
+            }
+        };
+
+        // Exécution du code
+        const wrappedCode = `
+            (function(exports, module, api, console) {
+                ${commonJSCode}
+            })(exports, module, api, console);
+        `;
+        const fn = new Function('exports', 'module', 'api', 'console', wrappedCode);
+        fn.call(context, exports, module, api, context.console);
+
+        // Vérification de la structure
+        if (!exports.meta || typeof exports.start !== 'function') {
+            throw new Error('Structure invalide : le plugin doit exporter "meta" et une fonction "start"');
         }
+
+        // Démarrage du plugin
+        await exports.start(api);
+        
+        // Notification de démarrage réussi
+        parentPort.postMessage({ type: "started" });
     } catch (error) {
         parentPort.postMessage({ 
             type: "error", 

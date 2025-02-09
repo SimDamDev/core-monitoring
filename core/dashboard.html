@@ -73,6 +73,7 @@
     <script>
         const logs = document.getElementById('logs');
         const metrics = document.getElementById('metrics');
+        let ws;
 
         function log(message, isError = false) {
             const line = document.createElement('div');
@@ -124,8 +125,35 @@
                 });
         }
 
+        function connectWebSocket() {
+            ws = new WebSocket(`ws://${window.location.host}`);
+            
+            ws.onopen = () => {
+                log('🔌 Connecté au serveur');
+            };
+            
+            ws.onclose = () => {
+                log('🔌 Déconnecté du serveur', true);
+                // Reconnexion après 5 secondes
+                setTimeout(connectWebSocket, 5000);
+            };
+            
+            ws.onmessage = (event) => {
+                const metric = JSON.parse(event.data);
+                log(`📊 Nouvelle métrique: ${metric.name} = ${metric.value}${metric.unit}`);
+                updateMetrics();
+            };
+            
+            ws.onerror = (error) => {
+                log(`❌ Erreur WebSocket: ${error.message}`, true);
+            };
+        }
+
         // Mise à jour initiale
         updateMetrics();
+        
+        // Connexion WebSocket
+        connectWebSocket();
 
         // Mise à jour toutes les secondes
         setInterval(updateMetrics, 1000);
