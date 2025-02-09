@@ -63,17 +63,47 @@
             overflow-y: auto;
             font-size: 12px;
         }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        #toggleConnection {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+        #toggleConnection:hover {
+            background: #1d4ed8;
+        }
+        #toggleConnection.disconnected {
+            background: #dc2626;
+        }
+        #toggleConnection.disconnected:hover {
+            background: #b91c1c;
+        }
     </style>
 </head>
 <body>
-    <h1>Tableau de bord IronMetrics</h1>
+    <div class="header">
+        <h1>Tableau de bord IronMetrics</h1>
+        <button id="toggleConnection">Déconnexion</button>
+    </div>
     <div id="metrics"></div>
     <div id="logs"></div>
 
     <script>
         const logs = document.getElementById('logs');
         const metrics = document.getElementById('metrics');
+        const toggleButton = document.getElementById('toggleConnection');
         let ws;
+        let isConnected = true;
 
         function log(message, isError = false) {
             const line = document.createElement('div');
@@ -126,16 +156,22 @@
         }
 
         function connectWebSocket() {
+            if (!isConnected) return;
+
             ws = new WebSocket(`ws://${window.location.host}`);
             
             ws.onopen = () => {
                 log('🔌 Connecté au serveur');
+                toggleButton.textContent = 'Déconnexion';
+                toggleButton.classList.remove('disconnected');
             };
             
             ws.onclose = () => {
                 log('🔌 Déconnecté du serveur', true);
-                // Reconnexion après 5 secondes
-                setTimeout(connectWebSocket, 5000);
+                if (isConnected) {
+                    // Reconnexion après 5 secondes seulement si on est en mode "connecté"
+                    setTimeout(connectWebSocket, 5000);
+                }
             };
             
             ws.onmessage = (event) => {
@@ -149,14 +185,38 @@
             };
         }
 
+        toggleButton.addEventListener('click', () => {
+            isConnected = !isConnected;
+            
+            if (!isConnected) {
+                // Mode déconnecté
+                if (ws) {
+                    ws.close();
+                }
+                toggleButton.textContent = 'Connexion';
+                toggleButton.classList.add('disconnected');
+                log('🔌 Déconnexion manuelle', true);
+            } else {
+                // Mode connecté
+                toggleButton.textContent = 'Déconnexion';
+                toggleButton.classList.remove('disconnected');
+                log('🔌 Tentative de reconnexion...');
+                connectWebSocket();
+            }
+        });
+
         // Mise à jour initiale
         updateMetrics();
         
-        // Connexion WebSocket
+        // Connexion WebSocket initiale
         connectWebSocket();
 
-        // Mise à jour toutes les secondes
-        setInterval(updateMetrics, 1000);
+        // Mise à jour toutes les secondes si connecté
+        setInterval(() => {
+            if (isConnected) {
+                updateMetrics();
+            }
+        }, 1000);
 
         // Logs de démarrage
         log('🚀 Dashboard démarré');
