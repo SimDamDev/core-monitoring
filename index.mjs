@@ -3,6 +3,7 @@ import { PluginSandbox } from './core/sandbox.mjs';
 import { Dashboard } from './core/dashboard.mjs';
 import { Storage } from './core/storage.mjs';
 import { MetricsScheduler } from './core/scheduler.mjs';
+import { exportRoutes } from './routes/export.mjs';
 import fs from 'fs/promises';
 
 // Gestion des erreurs non capturées
@@ -22,7 +23,17 @@ async function main() {
     const dashboard = new Dashboard(3000, storage, scheduler);
 
     try {
+        // Attendre que le stockage soit prêt et nettoyer les anciennes métriques
+        await storage.ready;
+        await storage.cleanOldMetrics();
+        
         // Attendre que le dashboard soit prêt
+        const server = dashboard.server;
+        
+        // Enregistrement des routes d'export avant le démarrage du serveur
+        await exportRoutes(server);
+        
+        // Maintenant on attend que le dashboard soit complètement initialisé
         await dashboard.ready;
         
         const loader = new PluginLoader(fs);

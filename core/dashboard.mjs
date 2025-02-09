@@ -1,5 +1,5 @@
 import { WebSocketServer } from 'ws';
-import http from 'http';
+import Fastify from 'fastify';
 import { readFile } from 'fs/promises';
 import { fileURLToPath } from 'url';
 import path from 'path';
@@ -15,6 +15,11 @@ export class Dashboard {
         this.scheduler = scheduler;
         this.metrics = [];
         this.clients = new Set();
+        
+        // Création du serveur Fastify dès le constructeur
+        this.server = Fastify();
+        this.server.decorate('storage', this.storage);
+        
         this.ready = new Promise((resolve, reject) => {
             this.init(port).then(resolve).catch(reject);
         });
@@ -29,27 +34,20 @@ export class Dashboard {
             const htmlPath = path.join(__dirname, 'dashboard.html');
             this.dashboardHtml = await readFile(htmlPath, 'utf8');
 
-            // Création du serveur HTTP
-            this.server = http.createServer(async (req, res) => {
-                // Autoriser les requêtes locales
-                res.setHeader('Access-Control-Allow-Origin', '*');
-                res.setHeader('Cache-Control', 'no-cache');
-                
-                if (req.url === '/metrics') {
-                    res.setHeader('Content-Type', 'application/json');
-                    // Retourner les métriques en mémoire
-                    const metrics = await this.getLatestMetrics();
-                    res.end(JSON.stringify(metrics));
-                    return;
-                }
-                
-                // Servir le dashboard
-                res.setHeader('Content-Type', 'text/html');
-                res.end(this.dashboardHtml);
+            // Route pour le dashboard
+            this.server.get('/', async (request, reply) => {
+                reply.type('text/html');
+                return this.dashboardHtml;
+            });
+
+            // Route pour les métriques
+            this.server.get('/metrics', async (request, reply) => {
+                reply.type('application/json');
+                return await this.getLatestMetrics();
             });
 
             // Création du serveur WebSocket
-            this.wss = new WebSocketServer({ server: this.server });
+            this.wss = new WebSocketServer({ server: this.server.server });
             
             // Gestion des connexions WebSocket
             this.wss.on('connection', (ws) => {
@@ -65,12 +63,8 @@ export class Dashboard {
             });
 
             // Démarrage du serveur
-            await new Promise((resolve) => {
-                this.server.listen(port, () => {
-                    console.log(`📊 Dashboard prêt sur http://localhost:${port}`);
-                    resolve();
-                });
-            });
+            await this.server.listen({ port });
+            console.log(`📊 Dashboard prêt sur http://localhost:${port}`);
 
             // Écoute des événements du scheduler
             this.scheduler.on('collection:stop', async () => {
