@@ -1,3 +1,19 @@
-node_modules
+# Base de données SQLite
+*.db
+*.db-shm
+*.db-wal
+
+# Dépendances
+node_modules/
 package-lock.json
+
+# Fichiers de couverture de tests
 coverage/
+
+# Fichiers temporaires
+.temp/
+*.log
+
+# Fichiers système
+.DS_Store
+Thumbs.db
