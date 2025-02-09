@@ -15,7 +15,8 @@ describe('MetricsScheduler - Collecte Intelligente', () => {
             config: {
                 refresh_profile: 'rapid'
             },
-            worker: mockWorker
+            worker: mockWorker,
+            collect: jest.fn()
         };
     });
 
@@ -35,6 +36,7 @@ describe('MetricsScheduler - Collecte Intelligente', () => {
         scheduler.incrementConnections();
         expect(scheduler.isCollecting).toBe(true);
         expect(scheduler.activeConnections).toBe(1);
+        expect(mockPlugin.collect).toHaveBeenCalled();
     });
 
     it('maintient la collecte avec plusieurs connexions', () => {

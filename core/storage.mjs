@@ -5,45 +5,71 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export class Storage {
-    constructor() {
-        const dbPath = path.join(__dirname, '..', 'metrics.db');
-        this.db = new sqlite3.Database(dbPath);
+    constructor(dbPath = null) {
+        // Si dbPath est null, utiliser le chemin par défaut
+        // Si dbPath est ':memory:', utiliser une base de données en mémoire
+        // Sinon utiliser le chemin spécifié
+        this.db = dbPath === ':memory:' 
+            ? new sqlite3.Database(':memory:')
+            : new sqlite3.Database(dbPath || path.join(__dirname, '..', 'metrics.db'));
+            
         this.ready = new Promise((resolve, reject) => {
             this.initDatabase().then(resolve).catch(reject);
         });
     }
 
     async initDatabase() {
-        return new Promise((resolve, reject) => {
+        return new Promise(async (resolve, reject) => {
             try {
-                // Active le mode WAL pour de meilleures performances
-                this.db.run('PRAGMA journal_mode = WAL');
+                // Active le mode WAL pour de meilleures performances (sauf pour la base en mémoire)
+                if (this.db.filename !== ':memory:') {
+                    await new Promise((res, rej) => {
+                        this.db.run('PRAGMA journal_mode = WAL', (err) => {
+                            if (err) rej(err);
+                            else res();
+                        });
+                    });
+                }
                 
                 // Création de la table metrics
-                this.db.run(`
-                    CREATE TABLE IF NOT EXISTS metrics (
-                        timestamp INTEGER NOT NULL,
-                        source TEXT CHECK(length(source) <= 32),
-                        name TEXT,
-                        value REAL NOT NULL,
-                        unit TEXT CHECK(unit IN ('%', 'ms', 'MB')),
-                        PRIMARY KEY (timestamp, source)
-                    )
-                `);
-
-                this.db.run(`
-                    CREATE INDEX IF NOT EXISTS idx_metrics_source 
-                    ON metrics(source)
-                `);
-
-                this.db.run(`
-                    CREATE INDEX IF NOT EXISTS idx_metrics_timestamp 
-                    ON metrics(timestamp DESC)
-                `, (err) => {
-                    if (err) reject(err);
-                    else resolve(true);
+                await new Promise((res, rej) => {
+                    this.db.run(`
+                        CREATE TABLE IF NOT EXISTS metrics (
+                            timestamp INTEGER NOT NULL,
+                            source TEXT CHECK(length(source) <= 32),
+                            name TEXT,
+                            value REAL NOT NULL,
+                            unit TEXT CHECK(unit IN ('%', 'ms', 'MB')),
+                            PRIMARY KEY (timestamp, source)
+                        )
+                    `, (err) => {
+                        if (err) rej(err);
+                        else res();
+                    });
                 });
 
+                // Création des index
+                await new Promise((res, rej) => {
+                    this.db.run(`
+                        CREATE INDEX IF NOT EXISTS idx_metrics_source 
+                        ON metrics(source)
+                    `, (err) => {
+                        if (err) rej(err);
+                        else res();
+                    });
+                });
+
+                await new Promise((res, rej) => {
+                    this.db.run(`
+                        CREATE INDEX IF NOT EXISTS idx_metrics_timestamp 
+                        ON metrics(timestamp DESC)
+                    `, (err) => {
+                        if (err) rej(err);
+                        else res();
+                    });
+                });
+
+                resolve();
             } catch (error) {
                 console.error('Erreur initialisation base de données:', error);
                 reject(error);
@@ -114,13 +140,21 @@ export class Storage {
     }
 
     async cleanup() {
-        if (this.db) {
-            return new Promise((resolve) => {
-                this.db.close(() => {
+        return new Promise((resolve, reject) => {
+            if (!this.db) {
+                resolve();
+                return;
+            }
+            this.db.close((err) => {
+                if (err) {
+                    console.error('Erreur fermeture base de données:', err);
+                    reject(err);
+                } else {
+                    this.db = null;
                     resolve();
-                });
+                }
             });
-        }
+        });
     }
 
     async backup() {

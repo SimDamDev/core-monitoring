@@ -2,6 +2,7 @@ import { PluginSandbox } from '../core/sandbox.mjs';
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { MetricsScheduler } from '../core/scheduler.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -162,7 +163,7 @@ describe('PluginSandbox', () => {
                 this.api.sendMetric({
                     name: 'test.metric',
                     value: Math.random() * 100,
-                    unit: 'count',
+                    unit: '%',
                     timestamp: Date.now()
                 });
             };
@@ -183,11 +184,17 @@ describe('PluginSandbox', () => {
 
         await sandbox.start();
         
+        // Simuler une connexion active
+        const scheduler = new MetricsScheduler();
+        scheduler.addPlugin(sandbox);
+        scheduler.incrementConnections();
+        
         // Attendre 3 collectes (15 secondes avec le profil rapid)
         await new Promise(resolve => setTimeout(resolve, 15_000));
         
         expect(metrics.length).toBeGreaterThanOrEqual(2);
         
+        scheduler.cleanup();
         await sandbox.stop();
     }, 20_000);
 }); 

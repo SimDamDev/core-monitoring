@@ -1,5 +1,6 @@
 import Ajv from 'ajv';
 import { MetricSchema, addCustomFormats } from './schema.mjs';
+import { AlertChecker } from './alerts.mjs';
 
 export class MetricsPipeline {
     constructor() {
@@ -10,6 +11,9 @@ export class MetricsPipeline {
         this.ajv = new Ajv({ allErrors: true });
         addCustomFormats(this.ajv);
         this.validateMetric = this.ajv.compile(MetricSchema);
+
+        // Initialisation de l'AlertChecker
+        this.alertChecker = new AlertChecker();
     }
 
     addMetric(rawData) {
@@ -21,6 +25,9 @@ export class MetricsPipeline {
             throw new Error(`Invalid metric format: ${errors}`);
         }
         this.queue.push(rawData);
+
+        // Vérification des alertes pour chaque métrique
+        this.alertChecker.check(rawData);
     }
 
     processQueue() {
